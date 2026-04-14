@@ -3,32 +3,266 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Auth Relay</title>
+  <title>Verifying…</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono&family=Syne:wght@400;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --accent: #FF6B9D; }
-    body {
-      min-height: 100vh;
-      background: #0a0a0f;
-      color: #e8e8f0;
-      font-family: 'Syne', sans-serif;
+
+    :root {
+      --accent: #5865F2;
+      --bg: #0a0a0f;
+      --surface: #13131a;
+      --border: #2a2a3a;
+      --text: #e8e8f0;
+      --muted: #6b6b88;
+      --radius: 12px;
+      --font-mono: 'Space Mono', monospace;
+      --font-display: 'Syne', sans-serif;
+    }
+
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-display);
       display: flex;
       align-items: center;
       justify-content: center;
-      text-align: center;
-      padding: 24px;
     }
-    h1 { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
-    p  { color: #6b6b88; font-family: 'Space Mono', monospace; font-size: 13px; line-height: 1.6; }
-    span { color: var(--accent); }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 40% at 50% -10%, color-mix(in srgb, var(--accent) 15%, transparent), transparent),
+        radial-gradient(ellipse 40% 30% at 80% 110%, color-mix(in srgb, var(--accent) 8%, transparent), transparent);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 460px;
+      padding: 24px;
+      animation: fadeUp 0.4s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px 36px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+
+    .icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+    }
+
+    .icon.spin {
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .icon.ok  {
+      background: color-mix(in srgb, #2ecc71 12%, transparent);
+      border: 1px solid color-mix(in srgb, #2ecc71 30%, transparent);
+    }
+    .icon.err {
+      background: color-mix(in srgb, #ff4d4d 12%, transparent);
+      border: 1px solid color-mix(in srgb, #ff4d4d 30%, transparent);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.7; transform: scale(0.94); }
+    }
+
+    /* spinner ring */
+    .spinner {
+      width: 28px; height: 28px;
+      border: 2.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 10px;
+    }
+    h1 span { color: var(--accent); }
+    h1.ok span { color: #2ecc71; }
+    h1.err span { color: #ff4d4d; }
+
+    .sub {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 28px 0;
+    }
+
+    .footer-note {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* retry button */
+    .retry-btn {
+      display: inline-block;
+      margin-top: 20px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .retry-btn:hover { opacity: 0.85; }
   </style>
 </head>
 <body>
-  <div>
-    <h1>Auth Relay<span>.</span></h1>
-    <p>This page handles authentication redirects<br />for supported games.</p>
+<div class="container">
+  <div class="card">
+
+    <!-- LOADING -->
+    <div id="stateLoading">
+      <div class="icon spin"><div class="spinner"></div></div>
+      <h1>Verifying<span>…</span></h1>
+      <p class="sub">Sending your credentials back to the game.<br />This window will close automatically.</p>
+    </div>
+
+    <!-- SUCCESS -->
+    <div id="stateSuccess" style="display:none">
+      <div class="icon ok">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M5 11l4.5 4.5L17 7" stroke="#2ecc71" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h1 class="ok">Verified<span>!</span></h1>
+      <p class="sub">You're authenticated. You can close this window and return to the game.</p>
+    </div>
+
+    <!-- ERROR -->
+    <div id="stateError" style="display:none">
+      <div class="icon err">
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <path d="M11 7v5M11 15h.01" stroke="#ff4d4d" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="11" cy="11" r="9" stroke="#ff4d4d" stroke-width="1.8"/>
+        </svg>
+      </div>
+      <h1 class="err">Something went<span> wrong</span></h1>
+      <p class="sub" id="errorMsg">Could not send credentials to the game.<br />Make sure the game is open and try again.</p>
+      <button class="retry-btn" onclick="retry()">Try Again</button>
+    </div>
+
+    <div class="divider"></div>
+    <p class="footer-note">Your token is sent directly to the game on your device.<br />It is never stored on any server.</p>
   </div>
+</div>
+
+<script>
+  // ── Read params ────────────────────────────────────────────────────────────
+  const params   = new URLSearchParams(window.location.search);
+  const gameId   = params.get('game')   || 'unknown';
+  const source   = params.get('source') || 'discord';  // 'discord' or 'patreon'
+  const port     = parseInt(params.get('port') || '7777', 10);
+
+  // Tokens can arrive in the hash (implicit flow) OR as query params (auth code flow)
+  const fragment      = new URLSearchParams(window.location.hash.substring(1));
+  const accessToken   = fragment.get('access_token') || params.get('access_token') || '';
+  const authCode      = params.get('code') || '';  // for auth-code flow (Patreon)
+
+  // ── UI helpers ─────────────────────────────────────────────────────────────
+  function show(id) {
+    ['stateLoading','stateSuccess','stateError'].forEach(s =>
+      document.getElementById(s).style.display = s === id ? '' : 'none'
+    );
+  }
+
+  function showError(msg) {
+    if (msg) document.getElementById('errorMsg').textContent = msg;
+    show('stateError');
+  }
+
+  // ── Send to Unity ──────────────────────────────────────────────────────────
+  // Unity opens a tiny HTTP server on localhost:PORT.
+  // We POST the token/code there; Unity picks it up and closes the flow.
+
+  async function sendToGame(payload) {
+    const url = `http://localhost:${port}/auth-callback`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        // Short timeout — Unity listener should respond instantly
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) throw new Error(`Game responded ${res.status}`);
+      show('stateSuccess');
+      // Close after a moment so the user sees the confirmation
+      setTimeout(() => window.close(), 1800);
+    } catch (err) {
+      console.error('sendToGame failed:', err);
+      showError('Could not reach the game. Make sure it\'s still open and try again.');
+    }
+  }
+
+  function retry() {
+    show('stateLoading');
+    run();
+  }
+
+  // ── Main ───────────────────────────────────────────────────────────────────
+  async function run() {
+    if (!accessToken && !authCode) {
+      showError('No authentication token was returned. Please try again from inside the game.');
+      return;
+    }
+
+    const payload = {
+      source,          // 'discord' or 'patreon'
+      game_id: gameId,
+      // Include whichever we have
+      ...(accessToken ? { access_token: accessToken } : {}),
+      ...(authCode    ? { code: authCode }            : {}),
+    };
+
+    await sendToGame(payload);
+  }
+
+  run();
+</script>
 </body>
 </html>
