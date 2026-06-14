@@ -201,7 +201,9 @@
 
   const gameId = stateParams.get('game')   || params.get('game')   || 'unknown';
   const source = stateParams.get('source') || params.get('source') || 'patreon';  // 'patreon'
+  const mode   = stateParams.get('mode')   || params.get('mode')   || 'localhost'; // 'localhost' or 'deeplink'
   const port   = parseInt(stateParams.get('port') || params.get('port') || '7777', 10);
+  const scheme = stateParams.get('scheme') || params.get('scheme') || 'herorico';
 
   // Tokens can arrive in the hash (implicit flow) OR as query params (auth code flow)
   const fragment      = new URLSearchParams(window.location.hash.substring(1));
@@ -222,8 +224,10 @@
   }
 
   // ── Send to Unity ──────────────────────────────────────────────────────────
-  // Unity opens a tiny HTTP server on localhost:PORT.
-  // We POST the token/code there; Unity picks it up and closes the flow.
+  // Desktop/WebGL: Unity opens a tiny HTTP server on localhost:PORT.
+  //                We POST the token/code there; Unity picks it up and closes the flow.
+  // Android:       Redirect the browser to a custom URI scheme that the OS routes
+  //                back into the Unity app (registered in AndroidManifest.xml).
 
   async function sendToGame(payload) {
     const url = `http://localhost:${port}/auth-callback`;
@@ -243,6 +247,19 @@
       console.error('sendToGame failed:', err);
       showError('Could not reach the game. Make sure it\'s still open and try again.');
     }
+  }
+
+  function sendToGameViaDeepLink(payload) {
+    const qs = new URLSearchParams();
+    if (payload.code)         qs.set('code', payload.code);
+    if (payload.access_token) qs.set('access_token', payload.access_token);
+    qs.set('source', payload.source);
+    qs.set('game_id', payload.game_id);
+
+    const deepLinkUrl = `${scheme}://auth-callback?${qs.toString()}`;
+    show('stateSuccess');
+    // Give the success message a beat to render before the OS hands off to the app
+    setTimeout(() => { window.location.href = deepLinkUrl; }, 600);
   }
 
   function retry() {
@@ -265,7 +282,11 @@
       ...(authCode    ? { code: authCode }            : {}),
     };
 
-    await sendToGame(payload);
+    if (mode === 'deeplink') {
+      sendToGameViaDeepLink(payload);
+    } else {
+      await sendToGame(payload);
+    }
   }
 
   run();
