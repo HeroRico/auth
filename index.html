@@ -193,15 +193,21 @@
 
 <script>
   // ── Read params ────────────────────────────────────────────────────────────
-  const params   = new URLSearchParams(window.location.search);
-  const gameId   = params.get('game')   || 'unknown';
-  const source   = params.get('source') || 'patreon';  // 'patreon'
-  const port     = parseInt(params.get('port') || '7777', 10);
+  const params = new URLSearchParams(window.location.search);
+
+  // Patreon returns our "state" param untouched — that's where game/source/port live,
+  // since Patreon requires an exact (query-string-free) redirect_uri match.
+  const stateParams = new URLSearchParams(params.get('state') || '');
+
+  const gameId = stateParams.get('game')   || params.get('game')   || 'unknown';
+  const source = stateParams.get('source') || params.get('source') || 'patreon';  // 'patreon'
+  const port   = parseInt(stateParams.get('port') || params.get('port') || '7777', 10);
 
   // Tokens can arrive in the hash (implicit flow) OR as query params (auth code flow)
   const fragment      = new URLSearchParams(window.location.hash.substring(1));
   const accessToken   = fragment.get('access_token') || params.get('access_token') || '';
   const authCode      = params.get('code') || '';  // for auth-code flow (Patreon)
+
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
   function show(id) {
