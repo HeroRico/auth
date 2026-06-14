@@ -195,7 +195,7 @@
   // ── Read params ────────────────────────────────────────────────────────────
   const params   = new URLSearchParams(window.location.search);
   const gameId   = params.get('game')   || 'unknown';
-  const source   = params.get('source') || 'discord';  // 'discord' or 'patreon'
+  const source   = params.get('source') || 'patreon';  // 'patreon'
   const port     = parseInt(params.get('port') || '7777', 10);
 
   // Tokens can arrive in the hash (implicit flow) OR as query params (auth code flow)
@@ -252,7 +252,7 @@
     }
 
     const payload = {
-      source,          // 'discord' or 'patreon'
+      source,          // 'patreon'
       game_id: gameId,
       // Include whichever we have
       ...(accessToken ? { access_token: accessToken } : {}),
