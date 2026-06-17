@@ -94,7 +94,6 @@
       50%       { opacity: 0.7; transform: scale(0.94); }
     }
 
-    /* spinner ring */
     .spinner {
       width: 28px; height: 28px;
       border: 2.5px solid color-mix(in srgb, var(--accent) 30%, transparent);
@@ -133,7 +132,6 @@
       line-height: 1.6;
     }
 
-    /* retry button */
     .retry-btn {
       display: inline-block;
       margin-top: 20px;
@@ -195,21 +193,18 @@
   // ── Read params ────────────────────────────────────────────────────────────
   const params = new URLSearchParams(window.location.search);
 
-  // Patreon returns our "state" param untouched — that's where game/source/port live,
-  // since Patreon requires an exact (query-string-free) redirect_uri match.
+  // Patreon returns our "state" param untouched — that's where game/source/port live.
   const stateParams = new URLSearchParams(params.get('state') || '');
 
   const gameId = stateParams.get('game')   || params.get('game')   || 'unknown';
-  const source = stateParams.get('source') || params.get('source') || 'patreon';  // 'patreon'
-  const mode   = stateParams.get('mode')   || params.get('mode')   || 'localhost'; // 'localhost' or 'deeplink'
+  const source = stateParams.get('source') || params.get('source') || 'patreon';
+  const mode   = stateParams.get('mode')   || params.get('mode')   || 'localhost';
   const port   = parseInt(stateParams.get('port') || params.get('port') || '7777', 10);
   const scheme = stateParams.get('scheme') || params.get('scheme') || 'herorico';
 
-  // Tokens can arrive in the hash (implicit flow) OR as query params (auth code flow)
-  const fragment      = new URLSearchParams(window.location.hash.substring(1));
-  const accessToken   = fragment.get('access_token') || params.get('access_token') || '';
-  const authCode      = params.get('code') || '';  // for auth-code flow (Patreon)
-
+  const fragment    = new URLSearchParams(window.location.hash.substring(1));
+  const accessToken = fragment.get('access_token') || params.get('access_token') || '';
+  const authCode    = params.get('code') || '';
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
   function show(id) {
@@ -223,12 +218,29 @@
     show('stateError');
   }
 
-  // ── Send to Unity ──────────────────────────────────────────────────────────
-  // Desktop/WebGL: Unity opens a tiny HTTP server on localhost:PORT.
-  //                We POST the token/code there; Unity picks it up and closes the flow.
-  // Android:       Redirect the browser to a custom URI scheme that the OS routes
-  //                back into the Unity app (registered in AndroidManifest.xml).
+  // ── Send to Unity: WebGL via postMessage ───────────────────────────────────
+  // The game window opened this as a popup. window.opener is the game tab.
+  // Auth.jslib registered a 'message' event listener on window that will
+  // receive this and call SendMessage('AuthManager', 'OnWebGLAuthCode', code).
+  function sendToGameViaPostMessage(payload) {
+    if (!window.opener) {
+      showError('Could not reach the game window. Make sure you opened this from inside the game, not a standalone browser tab.');
+      return;
+    }
+    try {
+      window.opener.postMessage(
+        { type: 'auth-callback', ...payload },
+        '*'   // Unity WebGL can be served from any origin; tighten if you know the exact origin
+      );
+      show('stateSuccess');
+      setTimeout(() => window.close(), 1800);
+    } catch (err) {
+      console.error('postMessage failed:', err);
+      showError('Could not send credentials to the game.');
+    }
+  }
 
+  // ── Send to Unity: Desktop via localhost HTTP ──────────────────────────────
   async function sendToGame(payload) {
     const url = `http://localhost:${port}/auth-callback`;
     try {
@@ -236,12 +248,10 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        // Short timeout — Unity listener should respond instantly
         signal: AbortSignal.timeout(5000),
       });
       if (!res.ok) throw new Error(`Game responded ${res.status}`);
       show('stateSuccess');
-      // Close after a moment so the user sees the confirmation
       setTimeout(() => window.close(), 1800);
     } catch (err) {
       console.error('sendToGame failed:', err);
@@ -249,6 +259,7 @@
     }
   }
 
+  // ── Send to Unity: Android via deep link ──────────────────────────────────
   function sendToGameViaDeepLink(payload) {
     const qs = new URLSearchParams();
     if (payload.code)         qs.set('code', payload.code);
@@ -258,7 +269,6 @@
 
     const deepLinkUrl = `${scheme}://auth-callback?${qs.toString()}`;
     show('stateSuccess');
-    // Give the success message a beat to render before the OS hands off to the app
     setTimeout(() => { window.location.href = deepLinkUrl; }, 600);
   }
 
@@ -275,16 +285,19 @@
     }
 
     const payload = {
-      source,          // 'patreon'
+      source,
       game_id: gameId,
-      // Include whichever we have
       ...(accessToken ? { access_token: accessToken } : {}),
       ...(authCode    ? { code: authCode }            : {}),
     };
 
-    if (mode === 'deeplink') {
+    if (mode === 'postmessage') {
+      // WebGL: send code back to the parent game window via postMessage
+      sendToGameViaPostMessage(payload);
+    } else if (mode === 'deeplink') {
       sendToGameViaDeepLink(payload);
     } else {
+      // Desktop: POST to Unity's localhost HTTP listener
       await sendToGame(payload);
     }
   }
